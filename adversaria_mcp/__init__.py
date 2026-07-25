@@ -1,0 +1,1 @@
+"""Adversaria MCP server package."""
