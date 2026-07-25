@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.LaghariLabs/adversaria-mcp",
+  "title": "Adversaria",
+  "description": "Read-only access to your local Adversaria meeting notes and to-dos. Runs on your machine, opens the desktop app's SQLite database read-only, and makes no network calls of its own.",
+  "websiteUrl": "https://lagharilabs.com/adversaria",
+  "repository": {
+    "url": "https://github.com/LaghariLabs/adversaria-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "adversaria-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "ADVERSARIA_DB",
+          "description": "Path to the Adversaria meetings.db. Defaults to the desktop app's location for your OS; set this only if your database lives elsewhere.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

@@ -76,3 +76,24 @@ The server is local and read-only. It never writes to your data and never phones
 home. When you query through a **cloud** model (e.g. Claude Desktop), the meeting
 content the tools return is sent to that provider as part of your request — same as
 pasting it into a chat. For a fully on-device loop, use a local-LLM MCP client.
+
+## Publishing to the MCP Registry
+
+`server.json` in this repo is ready. Publishing needs credentials only the
+maintainer has, so it can't be automated:
+
+```sh
+# 1. The registry stores metadata, not artifacts — the package must exist first.
+uv build && uv publish            # needs a PyPI account/token
+
+# 2. Authenticate. The namespace must match the GitHub account:
+#    io.github.LaghariLabs/adversaria-mcp
+mcp-publisher login github        # interactive OAuth
+
+# 3. Publish
+mcp-publisher publish --dry-run   # validate first
+mcp-publisher publish
+```
+
+Bump `version` in both `pyproject.toml` and `server.json` for each release —
+the registry rejects a republish of an existing version.
