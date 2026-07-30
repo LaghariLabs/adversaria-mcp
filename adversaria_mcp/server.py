@@ -44,6 +44,30 @@ def _db_path() -> Path:
     return Path.home() / ".local/share/meeting-note-taker/meetings.db"
 
 
+def _connect_rw() -> sqlite3.Connection:
+    """Read-write handle, used only by the two task tools below.
+
+    Adversaria owns this database and is usually running, so use WAL and a
+    generous busy timeout rather than failing the moment the app happens to be
+    writing. Writes here are a couple of rows, seconds apart — not a workload.
+    """
+    path = _db_path()
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Adversaria database not found at {path}. "
+            "Open the app at least once, or set ADVERSARIA_DB to its meetings.db."
+        )
+    conn = sqlite3.connect(str(path), timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
+
+
+def _agent_name() -> str:
+    return os.environ.get("ADVERSARIA_AGENT_NAME", "claude").strip() or "claude"
+
+
 def _connect() -> sqlite3.Connection:
     path = _db_path()
     if not path.exists():
@@ -270,6 +294,80 @@ def get_action_items(status: str = "open", limit: int = 100) -> list[dict[str, A
         }
         for r in rows
     ]
+
+
+@mcp.tool()
+def start_task(item_id: int) -> dict[str, Any]:
+    """Mark a to-do as IN PROGRESS before you start working on it.
+
+    Call this first so the person watching their board can see what you are
+    working on right now. Returns the updated item.
+    """
+    with closing(_connect_rw()) as conn:
+        row = conn.execute(
+            "SELECT id, text, done FROM action_items WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"No to-do with id {item_id}.")
+        if row["done"]:
+            raise ValueError(f"To-do {item_id} is already done.")
+        conn.execute(
+            "UPDATE action_items SET status = 'in_progress', completed_by = ? WHERE id = ?",
+            (f"agent:{_agent_name()}", item_id),
+        )
+        conn.commit()
+    return {"id": item_id, "text": row["text"], "status": "in_progress"}
+
+
+@mcp.tool()
+def complete_task(item_id: int, evidence: str) -> dict[str, Any]:
+    """Report that you FINISHED a to-do, with proof of what you did.
+
+     is required and must say what you actually did — one line, with
+    a file path, commit, URL or draft location where that makes sense. For
+    example: "Drafted reply to Sarah in ~/Drafts/sarah-pricing.md" or "Opened
+    PR #42 updating the onboarding copy".
+
+    This does NOT mark the to-do done. It moves it to the review column in
+    Adversaria, where the person accepts it. Never claim work you did not do —
+    the evidence is what they will check.
+    """
+    evidence = (evidence or "").strip()
+    if len(evidence) < 10:
+        raise ValueError(
+            "evidence is required: say what you actually did, with a path/link "
+            "where possible, so the person can verify it in seconds."
+        )
+    with closing(_connect_rw()) as conn:
+        row = conn.execute(
+            "SELECT id, text, done FROM action_items WHERE id = ?", (item_id,)
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"No to-do with id {item_id}.")
+        if row["done"]:
+            raise ValueError(f"To-do {item_id} is already done.")
+        conn.execute(
+            """UPDATE action_items
+                  SET status = 'ai_done',
+                      completed_by = ?,
+                      completed_at = ?,
+                      evidence = ?
+                WHERE id = ?""",
+            (
+                f"agent:{_agent_name()}",
+                datetime.now(timezone.utc).isoformat(),
+                evidence[:2000],
+                item_id,
+            ),
+        )
+        conn.commit()
+    return {
+        "id": item_id,
+        "text": row["text"],
+        "status": "ai_done",
+        "evidence": evidence,
+        "note": "Waiting for the user to accept it in Adversaria.",
+    }
 
 
 def main() -> None:

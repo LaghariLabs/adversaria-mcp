@@ -1,7 +1,7 @@
 [project]
 name = "adversaria-mcp"
-version = "0.1.0"
-description = "Sovereign-first MCP server exposing your local Adversaria meeting notes + to-dos (read-only, on-device)."
+version = "0.2.0"
+description = "MCP server for Adversaria: read your local meeting notes and to-dos, and report completed work back for your approval. On-device, no network calls of its own."
 requires-python = ">=3.10"
 dependencies = ["mcp>=1.2"]
 
